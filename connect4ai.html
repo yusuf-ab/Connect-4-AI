@@ -1,0 +1,507 @@
+
+<canvas id="canvas" width="750px" height="750px"></canvas>
+
+<script>
+
+// Setup
+var canvas = document.getElementById('canvas');
+var ctx = canvas.getContext('2d');  
+var FPS = 60;
+
+// Cell Piece Object
+function cell(x,y,size){
+  this.value=0
+  this.color = "#F8F8F8"
+  this.x = x;
+  this.y = y;
+  this.width = size  
+  this.height = size
+  this.draw = function() {
+    ctx.fillStyle = this.color;
+    ctx.beginPath(); 
+    ctx.arc(this.x+this.width/2, this.y+this.width/2, this.width/2, 0, 2 * Math.PI);
+    ctx.fill(); 
+    //ctx.fillRect(this.x, this.y, this.width, this.height);  
+  }
+};
+
+// Board Object
+function background_board(x,y,w,h){  
+  this.color = "#00aacc"
+  this.x = x;
+  this.y = y;
+  this.width = w  
+  this.height = h
+  this.draw = function() {
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x, this.y, this.width, this.height);  
+  }
+};
+
+// Mouse Handling
+var mouse_x=0
+var mouse_y=0
+var mouse_pressed=false
+
+canvas.addEventListener('mousemove', function(e) {
+  var rect = canvas.getBoundingClientRect();
+
+  mouse_x=e.clientX - rect.left
+  mouse_y=e.clientY - rect.top
+}, false);
+
+canvas.addEventListener('mousedown', function(e) {
+  mouse_pressed=true
+  //console.log(mouse_pressed)
+}, false);
+
+canvas.addEventListener('mouseup', function(e) {
+  mouse_pressed=false
+  //console.log(mouse_pressed)
+}, false);
+
+// Constants
+var columns = 7
+var rows = 6
+var current_player = 1
+var cells=[]
+var cell_size = 50
+var gap = 70
+var between_gap=gap-cell_size
+var top_padding = cell_size + between_gap*3;
+var left_padding = 25
+
+
+
+// Create board
+var bb = new background_board(left_padding-between_gap,top_padding-between_gap,gap*columns+between_gap,gap*rows+between_gap);
+
+var win = false;
+// Create cells
+for (var y = rows-1; y >= 0; y--) {
+  cells.push([]);
+  for (var x = 0; x <= columns-1; x++) {
+    cells[cells.length-1].push(new cell(left_padding+x*gap,top_padding+y*gap,cell_size));
+  }
+}
+
+// Create preview cell
+preview_cell = new cell(left_padding,between_gap,cell_size);
+preview_cell.color = "#ff0000"
+
+var p1_color = '#FF0000'
+var p2_color = '#FFFF00'
+
+var next_move = 0;
+
+var ai_mode = true;
+// Game Loop
+setInterval(function() {
+
+  // Clear Screen
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw Board
+  bb.draw()
+
+  // Render Cells
+  for (r in cells){
+    for (c in cells[r]){
+      if (cells[r][c].value == 0){
+        cells[r][c].color='#F8F8F8'
+      }
+      else if (cells[r][c].value == 1){
+        cells[r][c].color=p1_color;
+      }
+      else if (cells[r][c].value == -1){
+        cells[r][c].color=p2_color
+      }
+      cells[r][c].draw();
+    }
+  }
+
+  // Calculate preview cell position and draw
+  x_calc=mouse_x-left_padding
+  current_col=(x_calc/70) >> 0
+  second_current_col=((x_calc+20)/70) >> 0
+
+  if (current_col >= 7){
+    current_col=6
+  }
+
+  if (second_current_col >= 7){
+    second_current_col=6
+  }
+
+  if (current_col!=second_current_col){
+    if (x_calc-(current_col*70)-50 > 10){
+      current_col+=1
+    }
+  }
+
+  preview_cell.x=left_padding+current_col*70
+  if (ai_mode && current_player != -1){
+    preview_cell.draw();
+  }
+
+  if (win){
+    ctx.font = "30px Arial";
+    ctx.fillText("4 in a row!", 10, 50);
+  }
+
+  // Mouse Event
+  if (mouse_pressed == true){
+
+    if (ai_mode && current_player == -1){
+      current_col = next_move;
+    }
+
+    mouse_pressed = false
+    cell_space = false
+
+    // Add cell in next open row
+    for (r in cells){
+      if (cells[r][current_col].value == 0){
+        cells[r][current_col].value=current_player;
+        cell_space = true
+        break;
+      }
+    }
+
+    if (cell_space){
+
+      // check for win
+      if (checkForWin(boardToValues(cells), current_player)) {
+        win = true
+        alert("4 in a row!");
+      }
+      // Red(1) turns Blue(2) / Blue(2) turns Red(1)
+      if (current_player == 1){
+        current_player=-1
+        preview_cell.color=p2_color
+      }
+      else{
+        current_player=1
+        preview_cell.color=p1_color;
+      }
+
+      next_move = negamax(boardToValuesPlayer(cells,current_player),depth,-Infinity, Infinity, 1)
+      console.log(next_move)
+      next_move = next_move.bestMove;
+      
+    }
+  }
+  
+
+}, 1000/FPS);
+
+function checkLine(a, b, c, d, current_player) {
+  return a === current_player && a === b && a === c && a === d;
+}
+
+function checkLine2(a, b, c, d, current_player) {
+  return [a,b,c,d].every(val => val === 0 || val === current_player);
+}
+
+function checkLine3(a, b, c, d, current_player) {
+  const set = [a, b, c, d];
+  if (set.some(val => val !== 0 && val !== current_player)) {
+    return 0;
+  }
+  return set.filter(val => val === current_player).length;
+}
+
+function checkForWin(board, current_player) {
+  // Check horizontally
+  for (r=0; r<rows; r++){
+    for (c=0; c<columns-3; c++){
+      if (checkLine(board[r][c], board[r][c+1], board[r][c+2], board[r][c+3], current_player)){
+        return true;
+      }
+    }
+  }
+
+  // Check vertically
+  for (c=0; c<columns; c++){
+    for (r=0; r<rows-3; r++){
+      if (checkLine(board[r][c], board[r+1][c], board[r+2][c], board[r+3][c], current_player)){
+        return true;
+      }
+    }
+  }
+
+  // Check diagonally (positive slope)
+  for (r=0; r<rows-3; r++){
+    for (c=0; c<columns-3; c++){
+      if (checkLine(board[r][c], board[r+1][c+1], board[r+2][c+2], board[r+3][c+3], current_player)){
+        return true;
+      }
+    }
+  }
+
+  // Check diagonally (negative slope)
+  for (r=3; r<rows; r++){
+    for (c=0; c<columns-3; c++){
+      if (checkLine(board[r][c], board[r-1][c+1], board[r-2][c+2], board[r-3][c+3], current_player)){
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function countPossibleWins(board, current_player) {
+  let count = 0;
+
+  // Check horizontally
+  for (r=0; r<rows; r++){
+    for (c=0; c<columns-3; c++){
+      if (checkLine2(board[r][c], board[r][c+1], board[r][c+2], board[r][c+3], current_player)){
+        count++;
+      }
+    }
+  }
+
+  // Check vertically
+  for (c=0; c<columns; c++){
+    for (r=0; r<rows-3; r++){
+      if (checkLine2(board[r][c], board[r+1][c], board[r+2][c], board[r+3][c], current_player)){
+        count++;
+      }
+    }
+  }
+
+  // Check diagonally (positive slope)
+  for (r=0; r<rows-3; r++){
+    for (c=0; c<columns-3; c++){
+      if (checkLine2(board[r][c], board[r+1][c+1], board[r+2][c+2], board[r+3][c+3], current_player)){
+        count++;
+      }
+    }
+  }
+
+  // Check diagonally (negative slope)
+  for (r=3; r<rows; r++){
+    for (c=0; c<columns-3; c++){
+      if (checkLine2(board[r][c], board[r-1][c+1], board[r-2][c+2], board[r-3][c+3], current_player)){
+        count++;
+      }
+    }
+  }
+
+  return count;
+}
+
+function countPiecesInPossibleWins(board, current_player) {
+  let count = 0;
+
+  // Check horizontally
+  for (r=0; r<rows; r++){
+    for (c=0; c<columns-3; c++){
+      count += checkLine3(board[r][c], board[r][c+1], board[r][c+2], board[r][c+3], current_player)
+    }
+  }
+
+  // Check vertically
+  for (c=0; c<columns; c++){
+    for (r=0; r<rows-3; r++){
+      count += checkLine3(board[r][c], board[r+1][c], board[r+2][c], board[r+3][c], current_player)
+    }
+  }
+
+  // Check diagonally (positive slope)
+  for (r=0; r<rows-3; r++){
+    for (c=0; c<columns-3; c++){
+      count += checkLine3(board[r][c], board[r+1][c+1], board[r+2][c+2], board[r+3][c+3], current_player)
+    }
+  }
+
+  // Check diagonally (negative slope)
+  for (r=3; r<rows; r++){
+    for (c=0; c<columns-3; c++){
+      count += checkLine3(board[r][c], board[r-1][c+1], board[r-2][c+2], board[r-3][c+3], current_player)
+    }
+  }
+
+  return count;
+}
+</script>
+
+<script>
+function boardToValues(array){
+  return array.map(row => row.map(cell => cell.value));
+}
+
+function boardToValuesPlayer(array,player){
+  if (player == -1){
+    return array.map(row => row.map(cell => cell.value*-1));
+  }
+  return boardToValues(array);
+}
+
+function copyArray(array) {
+  return array.map(row => row.slice());
+}
+
+function isFull(array) {
+  return array.every(row => row.every(value => value !== 0));
+}
+
+function isTerminal(board){
+  return isFull(board) || checkForWin(board, 1) || checkForWin(board, -1)
+}
+
+function countValues(array, value) {
+  return array.reduce((count, row) =>
+    count + row.filter(cell => cell === value).length
+  , 0);
+}
+
+function makeMove(board,col,player){
+  var cell_space = false;
+  for (r in board){
+    if (board[r][col] == 0){
+      board[r][col]=player;
+      cell_space = true
+      break;
+    }
+  }
+  if (cell_space == false){
+    return null
+  }
+  return board
+}
+
+function heuristicValue(board,color){
+  
+  if (checkForWin(board, color)){
+    // if (21 -countValues(board, color) >1){
+    //   //console.log(board)
+    // }
+    return (21 - countValues(board, color))*10000
+  }
+  else if (checkForWin(board, -color)){
+    // if (21 -countValues(board, -color) >1){
+    //   //console.log(board)
+    // }
+    return -1*(21 - countValues(board, -color))*10000
+  }
+  else{
+    var c = countPiecesInPossibleWins(board, color) - countPiecesInPossibleWins(board, -color);
+    //console.log(c)
+    return c;
+  }
+}
+
+// If the game is tied, count the number of pieces that are part of a 3-in-a-row
+// var ROWS = rows;
+// var COLS = columns;
+// var count = 0;
+// for (let row = 0; row < ROWS; row++) {
+//   for (let col = 0; col < COLS; col++) {
+//     let piece = board[row][col];
+//     if (piece !== null && piece === color) { 
+//       // Check for horizontal 3-in-a-row
+//       if (col <= COLS - 3 && board[row][col+1] === piece && board[row][col+2] === piece) {
+//         count += 1;
+//       }
+//       // Check for vertical 3-in-a-row
+//       if (row <= ROWS - 3 && board[row+1][col] === piece && board[row+2][col] === piece) {
+//         count += 1;
+//       }
+//       // Check for diagonal 3-in-a-row (top-left to bottom-right)
+//       if (col <= COLS - 3 && row <= ROWS - 3 && board[row+1][col+1] === piece && board[row+2][col+2] === piece) {
+//         count += 1;
+//       }
+//       // Check for diagonal 3-in-a-row (bottom-left to top-right)
+//       if (col <= COLS - 3 && row >= 2 && board[row-1][col+1] === piece && board[row-2][col+2] === piece) {
+//         count += 1;
+//       }
+//     }
+//   }
+// }
+// // Return a value between 0 and 1 based on the number of pieces that are part of a 3-in-a-row
+// var mine =  count / (ROWS * COLS);
+
+// count = 0;
+// for (let row = 0; row < ROWS; row++) {
+//   for (let col = 0; col < COLS; col++) {
+//     let piece = board[row][col];
+//     if (piece !== null && piece === color) { 
+//       // Check for horizontal 3-in-a-row
+//       if (col <= COLS - 3 && board[row][col+1] === piece && board[row][col+2] === piece) {
+//         count += 1;
+//       }
+//       // Check for vertical 3-in-a-row
+//       if (row <= ROWS - 3 && board[row+1][col] === piece && board[row+2][col] === piece) {
+//         count += 1;
+//       }
+//       // Check for diagonal 3-in-a-row (top-left to bottom-right)
+//       if (col <= COLS - 3 && row <= ROWS - 3 && board[row+1][col+1] === piece && board[row+2][col+2] === piece) {
+//         count += 1;
+//       }
+//       // Check for diagonal 3-in-a-row (bottom-left to top-right)
+//       if (col <= COLS - 3 && row >= 2 && board[row-1][col+1] === piece && board[row-2][col+2] === piece) {
+//         count += 1;
+//       }
+//     }
+//   }
+// }
+
+// theirs =  count / (ROWS * COLS);
+
+// return mine - theirs;
+
+
+function negamax(board, depth, alpha, beta, color, moves = []) {
+  
+  if (depth === 0 || isTerminal(board)) {
+    let hv = heuristicValue(board, color);
+    //console.log('e',hv, color,board, moves)
+    return { value: hv, bestMove: null};
+  }
+
+  //let moves = generateMoves(board);
+  //moves = orderMoves(moves);
+
+  let value = -Infinity;
+  let bestMove = null;
+  for (let i = 0; i < columns; i++) {
+    //let move = moves[i];
+    let move = i;
+    let newBoard = makeMove(copyArray(board), move, color);
+    //console.log('t',depth, newBoard,  [...moves, move*color])
+    if (newBoard != null){
+      result = negamax(newBoard, depth - 1, -beta, -alpha, -color, [...moves, move*color])
+      var tempVal = -1*result.value;
+      if (tempVal >  value){
+        value = tempVal
+        bestMove = move;
+      }
+      //value = Math.max(value, -1*result.value);
+      alpha = Math.max(alpha, value);
+      if (alpha >= beta) {
+        break;
+      }
+    }
+  }
+  return {value: value , bestMove: bestMove};
+}
+
+var board = []
+
+for (var y = rows-1; y >= 0; y--) {
+  board.push([]);
+  for (var x = 0; x <= columns-1; x++) {
+    board[board.length-1].push(0);
+  }
+}
+let depth = 6;
+let alpha = -Infinity;
+let beta = Infinity;
+let color = 1;
+let bestMove = negamax(board, depth, alpha, beta, color);
+console.log(bestMove);
+
+</script>
