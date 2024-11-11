@@ -1,5 +1,7 @@
-
-<canvas id="canvas" width="750px" height="750px"></canvas>
+<body style="display: flex; align-items: center; justify-content: center;">
+  <canvas id="canvas"></canvas>
+  <input type="checkbox" id="ai">Disable AI
+</body>
 
 <script>
 
@@ -14,14 +16,22 @@ function cell(x,y,size){
   this.color = "#F8F8F8"
   this.x = x;
   this.y = y;
-  this.width = size  
-  this.height = size
+  this.size = size  
+  this.size2 = size*0.8
+
   this.draw = function() {
     ctx.fillStyle = this.color;
     ctx.beginPath(); 
-    ctx.arc(this.x+this.width/2, this.y+this.width/2, this.width/2, 0, 2 * Math.PI);
+    ctx.arc(this.x+this.size/2, this.y+this.size/2, this.size/2, 0, 2 * Math.PI);
     ctx.fill(); 
-    //ctx.fillRect(this.x, this.y, this.width, this.height);  
+
+
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); 
+    ctx.arc(this.x+this.size/2, this.y+this.size/2, this.size2/2, 0, 2 * Math.PI);
+    ctx.fill(); 
+    
+    //ctx.fillRect(this.x, this.y, this.size, this.size);  
   }
 };
 
@@ -65,28 +75,33 @@ var columns = 7
 var rows = 6
 var current_player = 1
 var cells=[]
+
+// Sizing
 var cell_size = 50
-var gap = 70
-var between_gap=gap-cell_size
-var top_padding = cell_size + between_gap*3;
+var gap = 20
+var pitch = gap + cell_size;
+var top_padding = cell_size + gap*3;
 var left_padding = 25
 
-
-
 // Create board
-var bb = new background_board(left_padding-between_gap,top_padding-between_gap,gap*columns+between_gap,gap*rows+between_gap);
+var bb = new background_board(left_padding-gap,top_padding-gap,pitch*columns+gap,pitch*rows+gap);
+
+
+canvas.width = bb.x + bb.width;
+canvas.height = bb.y + bb.height;
+
 
 var win = false;
 // Create cells
 for (var y = rows-1; y >= 0; y--) {
   cells.push([]);
   for (var x = 0; x <= columns-1; x++) {
-    cells[cells.length-1].push(new cell(left_padding+x*gap,top_padding+y*gap,cell_size));
+    cells[cells.length-1].push(new cell(left_padding+x*pitch,top_padding+y*pitch,cell_size));
   }
 }
 
 // Create preview cell
-preview_cell = new cell(left_padding,between_gap,cell_size);
+preview_cell = new cell(left_padding,gap,cell_size);
 preview_cell.color = "#ff0000"
 
 var p1_color = '#FF0000'
@@ -95,9 +110,9 @@ var p2_color = '#FFFF00'
 var next_move = 0;
 
 var ai_mode = true;
+
 // Game Loop
 setInterval(function() {
-
   // Clear Screen
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -121,39 +136,44 @@ setInterval(function() {
   }
 
   // Calculate preview cell position and draw
-  x_calc=mouse_x-left_padding
-  current_col=(x_calc/70) >> 0
-  second_current_col=((x_calc+20)/70) >> 0
+  x_rel= Math.max(0 , mouse_x-left_padding)
+  current_col=Math.floor(x_rel/pitch) >> 0
+  second_current_col=((x_rel+gap)/pitch) >> 0
 
   if (current_col >= 7){
-    current_col=6
+    current_col = 6
   }
 
   if (second_current_col >= 7){
-    second_current_col=6
+    second_current_col = 6
   }
 
   if (current_col!=second_current_col){
-    if (x_calc-(current_col*70)-50 > 10){
+    if (x_rel-(current_col*pitch)-cell_size > 10){
       current_col+=1
     }
   }
 
-  preview_cell.x=left_padding+current_col*70
-  if (ai_mode && current_player != -1){
+  preview_cell.x = left_padding + current_col*70
+  if ((ai_mode && current_player == 1) || !ai_mode){
     preview_cell.draw();
   }
 
   if (win){
     ctx.font = "30px Arial";
+    ctx.fillStyle = "black";
     ctx.fillText("4 in a row!", 10, 50);
   }
 
   // Mouse Event
   if (mouse_pressed == true){
 
+    if (win){
+      window.location.reload();
+    }
+
     if (ai_mode && current_player == -1){
-      current_col = next_move;
+      current_col = next_move; // Place AI move
     }
 
     mouse_pressed = false
@@ -162,7 +182,7 @@ setInterval(function() {
     // Add cell in next open row
     for (r in cells){
       if (cells[r][current_col].value == 0){
-        cells[r][current_col].value=current_player;
+        cells[r][current_col].value = current_player;
         cell_space = true
         break;
       }
@@ -175,7 +195,8 @@ setInterval(function() {
         win = true
         alert("4 in a row!");
       }
-      // Red(1) turns Blue(2) / Blue(2) turns Red(1)
+
+      // Switch player
       if (current_player == 1){
         current_player=-1
         preview_cell.color=p2_color
@@ -184,25 +205,28 @@ setInterval(function() {
         current_player=1
         preview_cell.color=p1_color;
       }
-
+      
+      // Evaluate best next move for AI
       next_move = negamax(boardToValuesPlayer(cells,current_player),depth,-Infinity, Infinity, 1)
       console.log(next_move)
       next_move = next_move.bestMove;
-      
     }
   }
-  
-
 }, 1000/FPS);
 
+// Checking helper functions
+
+// Checks if 4 pieces belong to the current player
 function checkLine(a, b, c, d, current_player) {
   return a === current_player && a === b && a === c && a === d;
 }
 
+// Checks if 4 pieces are either empty of belong to current player
 function checkLine2(a, b, c, d, current_player) {
   return [a,b,c,d].every(val => val === 0 || val === current_player);
 }
 
+// Counts how many of 4 pieces belong to the current player
 function checkLine3(a, b, c, d, current_player) {
   const set = [a, b, c, d];
   if (set.some(val => val !== 0 && val !== current_player)) {
@@ -348,10 +372,12 @@ function isFull(array) {
   return array.every(row => row.every(value => value !== 0));
 }
 
+// Checks if a board state represents an ended game
 function isTerminal(board){
   return isFull(board) || checkForWin(board, 1) || checkForWin(board, -1)
 }
 
+// Returns number of of occurences of a value in a 2d Array
 function countValues(array, value) {
   return array.reduce((count, row) =>
     count + row.filter(cell => cell === value).length
@@ -373,87 +399,24 @@ function makeMove(board,col,player){
   return board
 }
 
+// Assigns a heuristic value to a board state
 function heuristicValue(board,color){
-  
-  if (checkForWin(board, color)){
-    // if (21 -countValues(board, color) >1){
-    //   //console.log(board)
-    // }
-    return (21 - countValues(board, color))*10000
+
+  // Assign high value to winning state
+  if (checkForWin(board, color)){ 
+    return (21 - countValues(board, color))*10000  // Winning states with less moves are given a higher value
   }
+  // Assign low value to losing state
   else if (checkForWin(board, -color)){
-    // if (21 -countValues(board, -color) >1){
-    //   //console.log(board)
-    // }
     return -1*(21 - countValues(board, -color))*10000
   }
   else{
     var c = countPiecesInPossibleWins(board, color) - countPiecesInPossibleWins(board, -color);
-    //console.log(c)
     return c;
   }
 }
-
-// If the game is tied, count the number of pieces that are part of a 3-in-a-row
-// var ROWS = rows;
-// var COLS = columns;
-// var count = 0;
-// for (let row = 0; row < ROWS; row++) {
-//   for (let col = 0; col < COLS; col++) {
-//     let piece = board[row][col];
-//     if (piece !== null && piece === color) { 
-//       // Check for horizontal 3-in-a-row
-//       if (col <= COLS - 3 && board[row][col+1] === piece && board[row][col+2] === piece) {
-//         count += 1;
-//       }
-//       // Check for vertical 3-in-a-row
-//       if (row <= ROWS - 3 && board[row+1][col] === piece && board[row+2][col] === piece) {
-//         count += 1;
-//       }
-//       // Check for diagonal 3-in-a-row (top-left to bottom-right)
-//       if (col <= COLS - 3 && row <= ROWS - 3 && board[row+1][col+1] === piece && board[row+2][col+2] === piece) {
-//         count += 1;
-//       }
-//       // Check for diagonal 3-in-a-row (bottom-left to top-right)
-//       if (col <= COLS - 3 && row >= 2 && board[row-1][col+1] === piece && board[row-2][col+2] === piece) {
-//         count += 1;
-//       }
-//     }
-//   }
-// }
-// // Return a value between 0 and 1 based on the number of pieces that are part of a 3-in-a-row
-// var mine =  count / (ROWS * COLS);
-
-// count = 0;
-// for (let row = 0; row < ROWS; row++) {
-//   for (let col = 0; col < COLS; col++) {
-//     let piece = board[row][col];
-//     if (piece !== null && piece === color) { 
-//       // Check for horizontal 3-in-a-row
-//       if (col <= COLS - 3 && board[row][col+1] === piece && board[row][col+2] === piece) {
-//         count += 1;
-//       }
-//       // Check for vertical 3-in-a-row
-//       if (row <= ROWS - 3 && board[row+1][col] === piece && board[row+2][col] === piece) {
-//         count += 1;
-//       }
-//       // Check for diagonal 3-in-a-row (top-left to bottom-right)
-//       if (col <= COLS - 3 && row <= ROWS - 3 && board[row+1][col+1] === piece && board[row+2][col+2] === piece) {
-//         count += 1;
-//       }
-//       // Check for diagonal 3-in-a-row (bottom-left to top-right)
-//       if (col <= COLS - 3 && row >= 2 && board[row-1][col+1] === piece && board[row-2][col+2] === piece) {
-//         count += 1;
-//       }
-//     }
-//   }
-// }
-
-// theirs =  count / (ROWS * COLS);
-
-// return mine - theirs;
-
-
+// https://en.wikipedia.org/wiki/Negamax 
+// A simplied version of Minimax
 function negamax(board, depth, alpha, beta, color, moves = []) {
   
   if (depth === 0 || isTerminal(board)) {
@@ -462,13 +425,10 @@ function negamax(board, depth, alpha, beta, color, moves = []) {
     return { value: hv, bestMove: null};
   }
 
-  //let moves = generateMoves(board);
-  //moves = orderMoves(moves);
-
   let value = -Infinity;
   let bestMove = null;
   for (let i = 0; i < columns; i++) {
-    //let move = moves[i];
+    //let move = moves[i]
     let move = i;
     let newBoard = makeMove(copyArray(board), move, color);
     //console.log('t',depth, newBoard,  [...moves, move*color])
