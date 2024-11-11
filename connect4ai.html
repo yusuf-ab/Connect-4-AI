@@ -1,6 +1,9 @@
-<body style="display: flex; align-items: center; justify-content: center;">
-  <canvas id="canvas"></canvas>
-  <input type="checkbox" id="ai">Disable AI
+<body>
+  <input type="checkbox" id="ai" checked><span style="user-select: none; font-family: Arial, sans-serif;">Disable AI</span>
+  <div style="display: flex; align-items: center; justify-content: center;">
+    <canvas id="canvas"></canvas>
+  </div>
+  </br>
 </body>
 
 <script>
@@ -9,6 +12,14 @@
 var canvas = document.getElementById('canvas');
 var ctx = canvas.getContext('2d');  
 var FPS = 60;
+
+// AI Mode
+var ai_mode = true;
+
+// Event Listener for Checkbox
+document.getElementById('ai').addEventListener('change', function() {
+  ai_mode = !this.checked;
+});
 
 // Cell Piece Object
 function cell(x,y,size){
@@ -108,8 +119,6 @@ var p1_color = '#FF0000'
 var p2_color = '#FFFF00'
 
 var next_move = 0;
-
-var ai_mode = true;
 
 // Game Loop
 setInterval(function() {
