@@ -85,7 +85,6 @@ canvas.addEventListener('mouseup', function(e) {
 var columns = 7
 var rows = 6
 var current_player = 1
-var cells=[]
 
 // Sizing
 var cell_size = 50
@@ -97,19 +96,24 @@ var left_padding = 25
 // Create board
 var bb = new background_board(left_padding-gap,top_padding-gap,pitch*columns+gap,pitch*rows+gap);
 
-
 canvas.width = bb.x + bb.width;
 canvas.height = bb.y + bb.height;
 
-
 var win = false;
 // Create cells
-for (var y = rows-1; y >= 0; y--) {
-  cells.push([]);
-  for (var x = 0; x <= columns-1; x++) {
-    cells[cells.length-1].push(new cell(left_padding+x*pitch,top_padding+y*pitch,cell_size));
+function generate_cells(){
+  var cells=[]
+
+  for (var y = rows-1; y >= 0; y--) {
+    cells.push([]);
+    for (var x = 0; x <= columns-1; x++) {
+      cells[cells.length-1].push(new cell(left_padding+x*pitch,top_padding+y*pitch,cell_size));
+    }
   }
+
+  return cells
 }
+var cells = generate_cells();
 
 // Create preview cell
 preview_cell = new cell(left_padding,gap,cell_size);
@@ -178,7 +182,9 @@ setInterval(function() {
   if (mouse_pressed == true){
 
     if (win){
-      window.location.reload();
+      cells = generate_cells();
+      win = false;
+      return;
     }
 
     if (ai_mode && current_player == -1){
@@ -202,7 +208,6 @@ setInterval(function() {
       // check for win
       if (checkForWin(boardToValues(cells), current_player)) {
         win = true
-        alert("4 in a row!");
       }
 
       // Switch player
@@ -226,17 +231,12 @@ setInterval(function() {
 // Checking helper functions
 
 // Checks if 4 pieces belong to the current player
-function checkLine(a, b, c, d, current_player) {
+function isWinningLine(a, b, c, d, current_player) {
   return a === current_player && a === b && a === c && a === d;
 }
 
-// Checks if 4 pieces are either empty of belong to current player
-function checkLine2(a, b, c, d, current_player) {
-  return [a,b,c,d].every(val => val === 0 || val === current_player);
-}
-
 // Counts how many of 4 pieces belong to the current player
-function checkLine3(a, b, c, d, current_player) {
+function countLine(a, b, c, d, current_player) {
   const set = [a, b, c, d];
   if (set.some(val => val !== 0 && val !== current_player)) {
     return 0;
@@ -248,7 +248,7 @@ function checkForWin(board, current_player) {
   // Check horizontally
   for (r=0; r<rows; r++){
     for (c=0; c<columns-3; c++){
-      if (checkLine(board[r][c], board[r][c+1], board[r][c+2], board[r][c+3], current_player)){
+      if (isWinningLine(board[r][c], board[r][c+1], board[r][c+2], board[r][c+3], current_player)){
         return true;
       }
     }
@@ -257,7 +257,7 @@ function checkForWin(board, current_player) {
   // Check vertically
   for (c=0; c<columns; c++){
     for (r=0; r<rows-3; r++){
-      if (checkLine(board[r][c], board[r+1][c], board[r+2][c], board[r+3][c], current_player)){
+      if (isWinningLine(board[r][c], board[r+1][c], board[r+2][c], board[r+3][c], current_player)){
         return true;
       }
     }
@@ -266,7 +266,7 @@ function checkForWin(board, current_player) {
   // Check diagonally (positive slope)
   for (r=0; r<rows-3; r++){
     for (c=0; c<columns-3; c++){
-      if (checkLine(board[r][c], board[r+1][c+1], board[r+2][c+2], board[r+3][c+3], current_player)){
+      if (isWinningLine(board[r][c], board[r+1][c+1], board[r+2][c+2], board[r+3][c+3], current_player)){
         return true;
       }
     }
@@ -275,7 +275,7 @@ function checkForWin(board, current_player) {
   // Check diagonally (negative slope)
   for (r=3; r<rows; r++){
     for (c=0; c<columns-3; c++){
-      if (checkLine(board[r][c], board[r-1][c+1], board[r-2][c+2], board[r-3][c+3], current_player)){
+      if (isWinningLine(board[r][c], board[r-1][c+1], board[r-2][c+2], board[r-3][c+3], current_player)){
         return true;
       }
     }
@@ -284,76 +284,34 @@ function checkForWin(board, current_player) {
   return false;
 }
 
-function countPossibleWins(board, current_player) {
-  let count = 0;
-
-  // Check horizontally
-  for (r=0; r<rows; r++){
-    for (c=0; c<columns-3; c++){
-      if (checkLine2(board[r][c], board[r][c+1], board[r][c+2], board[r][c+3], current_player)){
-        count++;
-      }
-    }
-  }
-
-  // Check vertically
-  for (c=0; c<columns; c++){
-    for (r=0; r<rows-3; r++){
-      if (checkLine2(board[r][c], board[r+1][c], board[r+2][c], board[r+3][c], current_player)){
-        count++;
-      }
-    }
-  }
-
-  // Check diagonally (positive slope)
-  for (r=0; r<rows-3; r++){
-    for (c=0; c<columns-3; c++){
-      if (checkLine2(board[r][c], board[r+1][c+1], board[r+2][c+2], board[r+3][c+3], current_player)){
-        count++;
-      }
-    }
-  }
-
-  // Check diagonally (negative slope)
-  for (r=3; r<rows; r++){
-    for (c=0; c<columns-3; c++){
-      if (checkLine2(board[r][c], board[r-1][c+1], board[r-2][c+2], board[r-3][c+3], current_player)){
-        count++;
-      }
-    }
-  }
-
-  return count;
-}
-
 function countPiecesInPossibleWins(board, current_player) {
   let count = 0;
 
   // Check horizontally
   for (r=0; r<rows; r++){
     for (c=0; c<columns-3; c++){
-      count += checkLine3(board[r][c], board[r][c+1], board[r][c+2], board[r][c+3], current_player)
+      count += countLine(board[r][c], board[r][c+1], board[r][c+2], board[r][c+3], current_player)
     }
   }
 
   // Check vertically
   for (c=0; c<columns; c++){
     for (r=0; r<rows-3; r++){
-      count += checkLine3(board[r][c], board[r+1][c], board[r+2][c], board[r+3][c], current_player)
+      count += countLine(board[r][c], board[r+1][c], board[r+2][c], board[r+3][c], current_player)
     }
   }
 
   // Check diagonally (positive slope)
   for (r=0; r<rows-3; r++){
     for (c=0; c<columns-3; c++){
-      count += checkLine3(board[r][c], board[r+1][c+1], board[r+2][c+2], board[r+3][c+3], current_player)
+      count += countLine(board[r][c], board[r+1][c+1], board[r+2][c+2], board[r+3][c+3], current_player)
     }
   }
 
   // Check diagonally (negative slope)
   for (r=3; r<rows; r++){
     for (c=0; c<columns-3; c++){
-      count += checkLine3(board[r][c], board[r-1][c+1], board[r-2][c+2], board[r-3][c+3], current_player)
+      count += countLine(board[r][c], board[r-1][c+1], board[r-2][c+2], board[r-3][c+3], current_player)
     }
   }
 
